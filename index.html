@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>POP REDE — Jogo da Memória</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #8b5cf6;
+      --primary-strong: #7c3aed;
+      --gold: #facc15;
+      --gold-dark: #d97706;
+      --pink: #ec4899;
+      --cyan: #22d3ee;
+      --green: #22c55e;
+      --bg: #ffffff;
+      --surface: #f8fafc;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --text-dim: #64748b;
+      --radius: 16px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      font-family: 'Inter', 'Segoe UI', Tahoma, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      overflow-x: hidden;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-bottom: 16px;
+    }
+
+    /* ===== STATUS MESSAGE ===== */
+    .status {
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--primary-strong);
+      min-height: 18px;
+      padding: 5px 10px;
+      background: #f5f3ff;
+      border-radius: 8px;
+      border: 1px solid #ede9fe;
+      transition: all .3s;
+    }
+    .status.success {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+      color: #16a34a;
+    }
+    .status.error {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #dc2626;
+    }
+
+    /* ===== CONTROLS ===== */
+    .controls {
+      display: flex;
+    }
+
+    .btn-play {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
+      transition: transform .15s, box-shadow .2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-play:active:not(:disabled) { transform: scale(0.96); }
+    .btn-play:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-play::after {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%; width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: none;
+    }
+    .btn-play:not(:disabled):active::after {
+      left: 100%;
+      transition: left .5s;
+    }
+
+    /* ===== BOARD ===== */
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .card {
+      position: relative;
+      aspect-ratio: 4 / 3;
+      perspective: 1000px;
+      cursor: pointer;
+      border-radius: var(--radius);
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform .35s cubic-bezier(.4,0,.2,1);
+    }
+
+    .card.locked { pointer-events: none; }
+
+    .card-inner {
+      display: block;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform .5s cubic-bezier(.4,.0,.2,1);
+      border-radius: var(--radius);
+    }
+
+    /* Cascade entrance */
+    .card.deal-in {
+      opacity: 0;
+      transform: scale(0.7) translateY(30px);
+      animation: dealIn .4s cubic-bezier(.2,.8,.3,1) forwards;
+    }
+    @keyframes dealIn {
+      0%   { opacity: 0; transform: scale(0.7) translateY(30px); }
+      60%  { opacity: 1; transform: scale(1.04) translateY(-4px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    /* Shuffle move — cards physically swap positions */
+    .card.shuffle-move {
+      transition: transform .12s cubic-bezier(.4,0,.2,1);
+      z-index: 10;
+    }
+
+    /* Cascade flip-down */
+    .card.flip-down .card-inner {
+      transition: transform .45s cubic-bezier(.4,.0,.2,1);
+      transform: rotateY(0deg);
+    }
+
+    .card.flipped .card-inner,
+    .card.matched .card-inner {
+      transform: rotateY(180deg);
+    }
+
+    .card-face {
+      display: block;
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 2.5px solid var(--border);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    }
+
+    .card-face img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      -webkit-user-drag: none;
+      user-select: none;
+    }
+
+    .card-face.card-back {
+      border: 3px solid transparent;
+      background:
+        linear-gradient(145deg, #f8fafc, #eef2ff) padding-box,
+        linear-gradient(135deg, #fde047) border-box;
+      background-clip: padding-box, border-box;
+      background-origin: border-box;
+      box-shadow:
+        0 3px 10px rgba(0, 0, 0, 0.09),
+        0 1px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .card-back {
+      position: relative;
+    }
+
+    .card-back::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: rgba(0, 0, 0, 0.05);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .card-back img {
+      position: relative;
+      z-index: 0;
+    }
+
+    .cover-number {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Space Grotesk', 'Inter', sans-serif;
+      font-size: clamp(2rem, 8vw, 3rem);
+      font-weight: 900;
+      color: #ffffff;
+      text-shadow:
+        0 0 2px rgba(0, 0, 0, 0.95),
+        0 1px 3px rgba(0, 0, 0, 0.65),
+        0 3px 10px rgba(0, 0, 0, 0.45);
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.65))
+        drop-shadow(0 0 6px rgba(0, 0, 0, 0.42));
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .card-front {
+      transform: rotateY(180deg);
+    }
+
+    /* Tap feedback */
+    .card:not(.locked):not(.flipped):not(.matched):active .card-inner {
+      transform: scale(0.95);
+      transition: transform .1s;
+    }
+
+    /* Matched glow */
+    .card.matched .card-face {
+      border-color: var(--gold);
+      box-shadow: 0 0 18px 4px rgba(250, 204, 21, 0.35);
+    }
+
+    @keyframes matchPop {
+      0% { transform: rotateY(180deg) scale(1); }
+      40% { transform: rotateY(180deg) scale(1.08); }
+      100% { transform: rotateY(180deg) scale(1); }
+    }
+    .card.matched .card-inner {
+      animation: matchPop .4s ease;
+      animation-fill-mode: forwards;
+      transform: rotateY(180deg);
+    }
+
+    /* ===== WIN OVERLAY ===== */
+    .win-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 20px;
+      text-align: center;
+      animation: fadeIn .4s ease;
+    }
+    .win-overlay.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .win-emoji { font-size: 4rem; animation: bounce 1s infinite; }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-14px); }
+    }
+    .win-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.8rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--primary), var(--pink));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .win-stats {
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .win-btn {
+      margin-top: 10px;
+      border: none;
+      border-radius: 12px;
+      padding: 16px 40px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      touch-action: manipulation;
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.35);
+      transition: transform .15s;
+    }
+    .win-btn:active { transform: scale(0.96); }
+
+    /* ===== CONFETTI ===== */
+    .confetti-container {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10000;
+      overflow: hidden;
+    }
+    .confetti-piece {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      top: -20px;
+      border-radius: 2px;
+      animation: confettiFall linear forwards;
+    }
+    @keyframes confettiFall {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      80% { opacity: 1; }
+      100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (min-width: 440px) {
+      .board { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    }
+    @media (min-width: 600px) {
+      .shell { max-width: 780px; gap: 12px; }
+      body { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <div id="status" class="status">👀 Memorize as cartas! Toque em JOGAR quando estiver pronto.</div>
+
+  <div class="controls">
+    <button id="btnPlay" class="btn-play">▶ JOGAR</button>
+  </div>
+
+  <div id="board" class="board"></div>
+</div>
+
+<!-- WIN OVERLAY -->
+<div id="winOverlay" class="win-overlay">
+  <div class="win-emoji">🏆</div>
+  <div class="win-title">PARABÉNS!</div>
+  <div class="win-stats" id="winStats">Você completou em 0 jogadas</div>
+  <button class="win-btn" id="btnPlayAgain">🔄 JOGAR NOVAMENTE</button>
+</div>
+<div id="confettiContainer" class="confetti-container"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var IMAGES = [
+    'assets/img1.jpg',
+    'assets/img2.jpg',
+    'assets/img3.jpg',
+    'assets/img4.jpg',
+    'assets/img5.jpg',
+    'assets/img6.jpg'
+  ];
+  var COVER = 'assets/cover.jpg';
+  var MISMATCH_MS = 900;
+  var TOTAL_PAIRS = IMAGES.length;
+
+  var board = document.getElementById('board');
+  var statusEl = document.getElementById('status');
+  var btnPlay = document.getElementById('btnPlay');
+  var winOverlay = document.getElementById('winOverlay');
+  var winStats = document.getElementById('winStats');
+  var btnPlayAgain = document.getElementById('btnPlayAgain');
+  var confettiContainer = document.getElementById('confettiContainer');
+
+  var cards = [];
+  var firstCard = null;
+  var secondCard = null;
+  var locked = false;
+  var playing = false;
+  var animating = false;
+  var matched = 0;
+  var moves = 0;
+  var mismatchTimer = null;
+  var timerInterval = null;
+  var startTime = 0;
+
+  // Preload images
+  IMAGES.concat([COVER]).forEach(function(src) {
+    var img = new Image();
+    img.src = src;
+  });
+
+  function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+
+  function makePairs() {
+    var list = [];
+    IMAGES.forEach(function (src, idx) {
+      list.push({ src: src, pair: idx });
+      list.push({ src: src, pair: idx });
+    });
+    return list;
+  }
+
+  function msg(txt, type) {
+    statusEl.textContent = txt;
+    statusEl.className = 'status' + (type ? ' ' + type : '');
+  }
+
+  function startTimer() {
+    startTime = Date.now();
+    timerInterval = setInterval(function () {}, 250);
+  }
+
+  function stopTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  }
+
+  function getElapsedText() {
+    var elapsed = Math.floor((Date.now() - startTime) / 1000);
+    var m = Math.floor(elapsed / 60);
+    var s = elapsed % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function lockAll() {
+    var els = board.querySelectorAll('.card');
+    for (var i = 0; i < els.length; i++) els[i].classList.add('locked');
+  }
+
+  function unlockUnmatched() {
+    var els = board.querySelectorAll('.card');
+    for (var i = 0; i < els.length; i++) {
+      if (!els[i].classList.contains('matched')) els[i].classList.remove('locked');
+    }
+  }
+
+  function render(revealAll, animate) {
+    board.innerHTML = '';
+    cards.forEach(function (c, idx) {
+      var el = document.createElement('div');
+      el.className = 'card locked';
+      if (revealAll) el.classList.add('flipped');
+      if (animate) {
+        el.classList.add('deal-in');
+        el.style.animationDelay = (idx * 50) + 'ms';
+      }
+      el.dataset.idx = idx;
+      el.dataset.pair = c.pair;
+
+      el.innerHTML =
+        '<div class="card-inner">' +
+          '<div class="card-face card-back">' +
+            '<img src="' + COVER + '" alt="Verso">' +
+            '<div class="cover-number">' + (idx + 1) + '</div>' +
+          '</div>' +
+          '<div class="card-face card-front"><img src="' + c.src + '" alt="Carta"></div>' +
+        '</div>';
+
+      el.addEventListener('click', function () { onCardClick(el); });
+      board.appendChild(el);
+    });
+  }
+
+  function onCardClick(el) {
+    if (!playing || locked) return;
+    if (el.classList.contains('flipped') || el.classList.contains('matched')) return;
+    if (el === firstCard) return;
+
+    el.classList.add('flipped');
+
+    if (!firstCard) {
+      firstCard = el;
+      msg('🃏 Agora escolha a segunda carta...');
+      return;
+    }
+
+    secondCard = el;
+    moves++;
+    locked = true;
+    lockAll();
+
+    if (firstCard.dataset.pair === secondCard.dataset.pair) {
+      firstCard.classList.add('matched');
+      secondCard.classList.add('matched');
+      matched++;
+      msg('✅ Par encontrado! ' + matched + ' de ' + TOTAL_PAIRS, 'success');
+      firstCard = null;
+      secondCard = null;
+      locked = false;
+      unlockUnmatched();
+
+      if (matched === TOTAL_PAIRS) {
+        stopTimer();
+        lockAll();
+        msg('🎉 Todas as cartas encontradas!', 'success');
+        setTimeout(function () { showWin(); }, 500);
+      }
+      return;
+    }
+
+    msg('❌ Não foi dessa vez...', 'error');
+    mismatchTimer = setTimeout(function () {
+      firstCard.classList.remove('flipped');
+      secondCard.classList.remove('flipped');
+      firstCard = null;
+      secondCard = null;
+      locked = false;
+      unlockUnmatched();
+      msg('🔍 Encontre o par! Toque em uma carta.');
+      mismatchTimer = null;
+    }, MISMATCH_MS);
+  }
+
+  /* ===== WIN CELEBRATION ===== */
+  function showWin() {
+    var timeText = getElapsedText();
+    winStats.textContent = moves + ' jogadas em ' + timeText;
+    winOverlay.classList.add('active');
+    launchConfetti();
+  }
+
+  function hideWin() {
+    winOverlay.classList.remove('active');
+    confettiContainer.innerHTML = '';
+  }
+
+  function launchConfetti() {
+    confettiContainer.innerHTML = '';
+    var colors = ['#8b5cf6', '#facc15', '#ec4899', '#22d3ee', '#22c55e', '#f97316'];
+    for (var i = 0; i < 60; i++) {
+      var piece = document.createElement('div');
+      piece.className = 'confetti-piece';
+      piece.style.left = Math.random() * 100 + '%';
+      piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+      piece.style.animationDuration = (2 + Math.random() * 2) + 's';
+      piece.style.animationDelay = Math.random() * 1.5 + 's';
+      piece.style.width = (6 + Math.random() * 8) + 'px';
+      piece.style.height = (6 + Math.random() * 8) + 'px';
+      piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+      confettiContainer.appendChild(piece);
+    }
+    setTimeout(function () { confettiContainer.innerHTML = ''; }, 5000);
+  }
+
+  /* ===== GAME STATES ===== */
+  function initPreview() {
+    hideWin();
+    if (mismatchTimer) { clearTimeout(mismatchTimer); mismatchTimer = null; }
+    stopTimer();
+    firstCard = null; secondCard = null;
+    matched = 0; moves = 0; locked = true; playing = false; animating = false;
+    cards = shuffle(makePairs());
+    render(true, true);
+    btnPlay.disabled = false;
+    btnPlay.textContent = '▶ JOGAR';
+    msg('👀 Memorize as cartas! Toque em JOGAR quando estiver pronto.');
+  }
+
+  /* Reusable shuffle round: cards fly from old positions to new
+     speed = transition duration in ms (lower = faster) */
+  function doShuffleRound(speed, callback) {
+    var cardEls = board.querySelectorAll('.card');
+    var oldPositions = [];
+    for (var i = 0; i < cardEls.length; i++) {
+      var rect = cardEls[i].getBoundingClientRect();
+      oldPositions.push({ x: rect.left, y: rect.top });
+    }
+
+    var oldCards = cards.slice();
+    cards = shuffle(cards);
+
+    var moveMap = [];
+    var used = {};
+    for (var i = 0; i < oldCards.length; i++) {
+      for (var j = 0; j < cards.length; j++) {
+        if (!used[j] && cards[j].src === oldCards[i].src && cards[j].pair === oldCards[i].pair) {
+          moveMap[i] = j;
+          used[j] = true;
+          break;
+        }
+      }
+    }
+
+    render(true, false);
+    var newCardEls = board.querySelectorAll('.card');
+    var newPositions = [];
+    for (var i = 0; i < newCardEls.length; i++) {
+      var rect = newCardEls[i].getBoundingClientRect();
+      newPositions.push({ x: rect.left, y: rect.top });
+    }
+
+    var reverseMap = [];
+    for (var i = 0; i < moveMap.length; i++) {
+      reverseMap[moveMap[i]] = i;
+    }
+
+    for (var i = 0; i < newCardEls.length; i++) {
+      var oldIdx = reverseMap[i] !== undefined ? reverseMap[i] : i;
+      var dx = oldPositions[oldIdx].x - newPositions[i].x;
+      var dy = oldPositions[oldIdx].y - newPositions[i].y;
+      newCardEls[i].style.transition = 'none';
+      newCardEls[i].style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
+      newCardEls[i].classList.add('shuffle-move');
+      newCardEls[i].style.setProperty('--shuffle-speed', speed + 'ms');
+    }
+
+    board.offsetHeight;
+    for (var i = 0; i < newCardEls.length; i++) {
+      newCardEls[i].style.transition = 'transform ' + speed + 'ms cubic-bezier(.4,0,.2,1)';
+      newCardEls[i].style.transform = 'translate(0, 0)';
+    }
+
+    setTimeout(callback, speed + 20);
+  }
+
+  /* Single button: JOGAR → animated shuffle+flip → game starts
+     During game: REINICIAR → back to preview */
+  function onPlay() {
+    if (animating) return;
+
+    if (playing) {
+      // Reset to preview
+      initPreview();
+      return;
+    }
+
+    // === ANIMATED START SEQUENCE ===
+    animating = true;
+    btnPlay.disabled = true;
+    msg('🔀 Embaralhando...');
+
+    // Get positions of all cards BEFORE shuffle
+    var cardEls = board.querySelectorAll('.card');
+    var oldPositions = [];
+    for (var i = 0; i < cardEls.length; i++) {
+      var rect = cardEls[i].getBoundingClientRect();
+      oldPositions.push({ x: rect.left, y: rect.top });
+    }
+
+    // Shuffle the data
+    var oldCards = cards.slice();
+    cards = shuffle(cards);
+
+    // Build a map: for each card in OLD order, where does it go in NEW order?
+    // old index i → find where oldCards[i] ended up in cards[]
+    var moveMap = []; // moveMap[oldIdx] = newIdx
+    var used = {};
+    for (var i = 0; i < oldCards.length; i++) {
+      for (var j = 0; j < cards.length; j++) {
+        if (!used[j] && cards[j].src === oldCards[i].src && cards[j].pair === oldCards[i].pair) {
+          moveMap[i] = j;
+          used[j] = true;
+          break;
+        }
+      }
+    }
+
+    // Re-render with NEW order (face-up) but at OLD visual positions via translate
+    render(true, false);
+    var newCardEls = board.querySelectorAll('.card');
+    var newPositions = [];
+    for (var i = 0; i < newCardEls.length; i++) {
+      var rect = newCardEls[i].getBoundingClientRect();
+      newPositions.push({ x: rect.left, y: rect.top });
+    }
+
+    // For each OLD card at old position, it is now at newCardEls[moveMap[oldIdx]] 
+    // We want newCardEls[newIdx] to START at oldPositions[oldIdx] and animate to newPositions[newIdx]
+    // Reverse map: reverseMap[newIdx] = oldIdx
+    var reverseMap = [];
+    for (var i = 0; i < moveMap.length; i++) {
+      reverseMap[moveMap[i]] = i;
+    }
+
+    // Set each new card to start from where it was in the OLD layout
+    for (var i = 0; i < newCardEls.length; i++) {
+      var oldIdx = reverseMap[i] !== undefined ? reverseMap[i] : i;
+      var dx = oldPositions[oldIdx].x - newPositions[i].x;
+      var dy = oldPositions[oldIdx].y - newPositions[i].y;
+      newCardEls[i].style.transition = 'none';
+      newCardEls[i].style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
+      newCardEls[i].classList.add('shuffle-move');
+    }
+
+    // Force reflow, then animate to final (0,0)
+    board.offsetHeight;
+    for (var i = 0; i < newCardEls.length; i++) {
+      newCardEls[i].style.transition = '';
+      newCardEls[i].style.transform = 'translate(0, 0)';
+    }
+
+    // After first shuffle completes, chain accelerating rounds
+    // Total ~3.2s: slow → medium → fast → SUPER FAST
+    var shuffleSpeeds = [350, 320, 280, 240, 200, 160, 120, 90, 65, 45, 30, 30];
+    setTimeout(function () {
+      function chainShuffles(idx) {
+        if (idx >= shuffleSpeeds.length) {
+                    // === CASCADE FLIP DOWN ===
+              msg('🃏 Virando as cartas...');
+              var finalCards = Array.prototype.slice.call(board.querySelectorAll('.card'));
+              for (var i = 0; i < finalCards.length; i++) {
+                finalCards[i].classList.remove('shuffle-move');
+                finalCards[i].classList.remove('flipped');
+                finalCards[i].classList.add('flip-down');
+                finalCards[i].style.transform = '';
+                finalCards[i].style.transition = '';
+              }
+
+              // === GAME START ===
+              setTimeout(function () {
+                playing = true;
+                animating = false;
+                locked = false;
+                matched = 0; moves = 0;
+                unlockUnmatched();
+                startTimer();
+                btnPlay.disabled = false;
+                btnPlay.textContent = '🔄 REINICIAR';
+                msg('🔍 Jogo iniciado! Toque nas cartas para encontrar os pares.');
+              }, 500);
+          return;
+        }
+        doShuffleRound(shuffleSpeeds[idx], function () {
+          chainShuffles(idx + 1);
+        });
+      }
+      chainShuffles(0);
+    }, 150);
+  }
+
+  btnPlay.addEventListener('click', onPlay);
+  btnPlayAgain.addEventListener('click', initPreview);
+
+  initPreview();
+})();
+</script>
+</body>
+</html>
