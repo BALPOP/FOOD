@@ -228,12 +228,6 @@
       z-index: 0;
     }
 
-    /* Hide cover numbers until final reveal (variant 2 sequence) */
-    .board.hide-cover-numbers .cover-number {
-      opacity: 0;
-      visibility: hidden;
-    }
-
     .cover-number {
       position: absolute;
       inset: 0;
@@ -372,6 +366,7 @@
       body { padding: 16px; }
     }
 
+    /* Desktop: shell width/gap track viewport (does not affect phone layouts below 769px) */
     @media (min-width: 769px) {
       body {
         padding: clamp(16px, 2vmin, 32px);
@@ -620,10 +615,8 @@
   }
 
   /* Reusable shuffle round: cards fly from old positions to new
-     speed = transition duration in ms (lower = faster)
-     faceUp = if true, cards stay face-up during shuffle; if false, backs visible */
-  function doShuffleRound(speed, callback, faceUp) {
-    if (faceUp === undefined) faceUp = true;
+     speed = transition duration in ms (lower = faster) */
+  function doShuffleRound(speed, callback) {
     var cardEls = board.querySelectorAll('.card');
     var oldPositions = [];
     for (var i = 0; i < cardEls.length; i++) {
@@ -646,7 +639,7 @@
       }
     }
 
-    render(faceUp, false);
+    render(true, false);
     var newCardEls = board.querySelectorAll('.card');
     var newPositions = [];
     for (var i = 0; i < newCardEls.length; i++) {
@@ -747,55 +740,50 @@
       newCardEls[i].classList.add('shuffle-move');
     }
 
-    // Force reflow, then animate first shuffle to final (0,0) at normal speed
-    var firstShuffleMs = 350;
+    // Force reflow, then animate to final (0,0)
     board.offsetHeight;
     for (var i = 0; i < newCardEls.length; i++) {
-      newCardEls[i].style.transition = 'transform ' + firstShuffleMs + 'ms cubic-bezier(.4,0,.2,1)';
+      newCardEls[i].style.transition = '';
       newCardEls[i].style.transform = 'translate(0, 0)';
     }
 
-    // 1) First shuffle completes → hide cards (flip) → 2) two face-down shuffles → 3) reveal numbers & start
+    // After first shuffle completes, chain accelerating rounds
+    // Total ~3.2s: slow → medium → fast → SUPER FAST (last steps even quicker)
+    var shuffleSpeeds = [350, 320, 280, 240, 200, 160, 120, 90, 65, 45, 22, 16];
     setTimeout(function () {
-      msg('🃏 Escondendo as cartas...');
-      board.classList.add('hide-cover-numbers');
-      var afterFirst = Array.prototype.slice.call(board.querySelectorAll('.card'));
-      for (var fi = 0; fi < afterFirst.length; fi++) {
-        afterFirst[fi].classList.remove('shuffle-move');
-        afterFirst[fi].classList.remove('flipped');
-        afterFirst[fi].classList.add('flip-down');
-        afterFirst[fi].style.transform = '';
-        afterFirst[fi].style.transition = '';
+      function chainShuffles(idx) {
+        if (idx >= shuffleSpeeds.length) {
+                    // === CASCADE FLIP DOWN ===
+              msg('🃏 Virando as cartas...');
+              var finalCards = Array.prototype.slice.call(board.querySelectorAll('.card'));
+              for (var i = 0; i < finalCards.length; i++) {
+                finalCards[i].classList.remove('shuffle-move');
+                finalCards[i].classList.remove('flipped');
+                finalCards[i].classList.add('flip-down');
+                finalCards[i].style.transform = '';
+                finalCards[i].style.transition = '';
+              }
+
+              // === GAME START ===
+              setTimeout(function () {
+                playing = true;
+                animating = false;
+                locked = false;
+                matched = 0; moves = 0;
+                unlockUnmatched();
+                startTimer();
+                btnPlay.disabled = false;
+                btnPlay.textContent = '🔄 REINICIAR';
+                msg('🔍 Jogo iniciado! Toque nas cartas para encontrar os pares.');
+              }, 500);
+          return;
+        }
+        doShuffleRound(shuffleSpeeds[idx], function () {
+          chainShuffles(idx + 1);
+        });
       }
-
-      setTimeout(function () {
-        msg('🔀 Embaralhando (costas)...');
-        var normalBackShuffleMs = 300;
-        doShuffleRound(normalBackShuffleMs, function () {
-          doShuffleRound(normalBackShuffleMs, function () {
-            board.classList.remove('hide-cover-numbers');
-            var finalCards = board.querySelectorAll('.card');
-            for (var j = 0; j < finalCards.length; j++) {
-              finalCards[j].classList.remove('shuffle-move');
-              finalCards[j].style.transform = '';
-              finalCards[j].style.transition = '';
-            }
-
-            setTimeout(function () {
-              playing = true;
-              animating = false;
-              locked = false;
-              matched = 0; moves = 0;
-              unlockUnmatched();
-              startTimer();
-              btnPlay.disabled = false;
-              btnPlay.textContent = '🔄 REINICIAR';
-              msg('🔍 Jogo iniciado! Toque nas cartas para encontrar os pares.');
-            }, 400);
-          }, false);
-        }, false);
-      }, 480);
-    }, firstShuffleMs + 20);
+      chainShuffles(0);
+    }, 150);
   }
 
   btnPlay.addEventListener('click', onPlay);
