@@ -363,6 +363,19 @@
       .shell { max-width: 780px; gap: 12px; }
       body { padding: 16px; }
     }
+
+    /* Desktop: shell width/gap track viewport (does not affect phone layouts below 769px) */
+    @media (min-width: 769px) {
+      body {
+        padding: clamp(16px, 2vmin, 32px);
+      }
+      .shell {
+        width: min(100%, calc(100vw - 2 * clamp(16px, 2.5vmin, 40px)));
+        max-width: min(92vw, 1160px);
+        gap: clamp(12px, 1.5vmin, 18px);
+        padding-bottom: clamp(16px, 2vmin, 24px);
+      }
+    }
   </style>
 </head>
 <body>
@@ -733,8 +746,8 @@
     }
 
     // After first shuffle completes, chain accelerating rounds
-    // Total ~3.2s: slow → medium → fast → SUPER FAST
-    var shuffleSpeeds = [350, 320, 280, 240, 200, 160, 120, 90, 65, 45, 30, 30];
+    // Total ~3.2s: slow → medium → fast → SUPER FAST (last steps even quicker)
+    var shuffleSpeeds = [350, 320, 280, 240, 200, 160, 120, 90, 65, 45, 22, 16];
     setTimeout(function () {
       function chainShuffles(idx) {
         if (idx >= shuffleSpeeds.length) {
